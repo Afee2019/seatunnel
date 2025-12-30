@@ -17,7 +17,6 @@
 
 import { defineComponent, h, onUnmounted, ref } from 'vue'
 import { NDataTable, NTag } from 'naive-ui'
-import { useI18n } from 'vue-i18n'
 import { JobsService } from '@/service/job'
 import type { DataTableColumns } from 'naive-ui'
 import { NButton } from 'naive-ui'
@@ -27,8 +26,6 @@ import { getColorFromStatus } from '@/utils/getTypeFromStatus'
 
 export default defineComponent({
   setup() {
-    const { t } = useI18n()
-
     const jobs = ref([] as Job[])
 
     let timer: NodeJS.Timeout
@@ -47,32 +44,32 @@ export default defineComponent({
       }
       return [
         {
-          title: 'No',
+          title: '序号',
           key: 'No',
           render: (row, index) => h('div', index + 1)
         },
         {
-          title: 'Id',
+          title: '作业ID',
           key: 'jobId',
           sorter: 'default'
         },
         {
-          title: 'Name',
+          title: '作业名称',
           key: 'jobName',
           sorter: 'default'
         },
         {
-          title: 'Create Time',
+          title: '创建时间',
           key: 'createTime',
           sorter: 'default'
         },
         {
-          title: 'Finish Time',
+          title: '完成时间',
           key: 'finishTime',
           sorter: 'default'
         },
         {
-          title: 'Status',
+          title: '状态',
           key: 'jobStatus',
           render(row) {
             return (
@@ -83,7 +80,7 @@ export default defineComponent({
           }
         },
         {
-          title: 'Action',
+          title: '操作',
           key: 'actions',
           render(row) {
             return h(
@@ -94,7 +91,7 @@ export default defineComponent({
                   size: 'small',
                   onClick: () => view(row)
                 },
-                { default: () => 'View' }
+                { default: () => '查看' }
             )
           }
         }
@@ -104,7 +101,7 @@ export default defineComponent({
     const columns = createColumns()
     return () => (
         <div class="w-full bg-white p-6 border border-gray-100 rounded-xl">
-          <h2 class="font-bold text-2xl pb-6">{t('jobs.finishedJobs')}</h2>
+          <h2 class="font-bold text-2xl pb-6">已完成的作业</h2>
           <NDataTable columns={columns} data={jobs.value} pagination={false} bordered={false} />
         </div>
     )

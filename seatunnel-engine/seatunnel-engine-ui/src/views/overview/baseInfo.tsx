@@ -17,14 +17,11 @@
 
 import { defineComponent, onUnmounted, ref } from 'vue'
 import { NSpace, NCard } from 'naive-ui'
-import { useI18n } from 'vue-i18n'
 import { overviewService } from '@/service/overview'
 import type { Overview } from '@/service/overview/types'
 
 export default defineComponent({
   setup() {
-    const { t } = useI18n()
-
     const data = ref({} as Overview)
 
     let timer: NodeJS.Timeout
@@ -38,21 +35,21 @@ export default defineComponent({
 
     return () => (
       <NSpace wrap-item={false}>
-        <NCard title="Workers" hoverable style="flex:1">
+        <NCard title="工作节点" hoverable style="flex:1">
           <span class="text-2xl font-bold">{data.value.workers}</span>
           <div class="border border-b-0 mt-3" />
           <NSpace class="mt-3" size={16}>
-            <span>Total Slot: {data.value.totalSlot}</span>
-            <span>Unassigned Slot: {data.value.unassignedSlot}</span>
+            <span>总槽位: {data.value.totalSlot}</span>
+            <span>空闲槽位: {data.value.unassignedSlot}</span>
           </NSpace>
         </NCard>
-        <NCard title="Running Jobs" hoverable style="flex:1">
+        <NCard title="作业统计" hoverable style="flex:1">
           <span class="text-2xl font-bold">{data.value.runningJobs}</span>
           <div class="border border-b-0 mt-3" />
           <NSpace class="mt-3" size={16}>
-            <span>Cancelled: {data.value.cancelledJobs}</span>
-            <span>Failed: {data.value.failedJobs}</span>
-            <span>Finished: {data.value.finishedJobs}</span>
+            <span>已取消: {data.value.cancelledJobs}</span>
+            <span>已失败: {data.value.failedJobs}</span>
+            <span>已完成: {data.value.finishedJobs}</span>
           </NSpace>
         </NCard>
       </NSpace>

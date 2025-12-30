@@ -25,7 +25,7 @@ export const useSettingStore = defineStore({
     dataUniqueValue: false,
     fillet: 15,
     requestTime: 6000,
-    locales: 'en_US',
+    locales: 'zh_CN',
     primaryColor: '#4678B9'
   }),
   getters: {

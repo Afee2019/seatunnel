@@ -24,18 +24,18 @@ hazelcast-client:
       cluster-connect-timeout-millis: 3000
   network:
     cluster-members:
-      - localhost:5801
-      - localhost:5802
-      - localhost:5803
-      - localhost:5804
-      - localhost:5805
-      - localhost:5806
-      - localhost:5807
-      - localhost:5808
-      - localhost:5809
-      - localhost:5810
-      - localhost:5811
-      - localhost:5812
-      - localhost:5813
-      - localhost:5814
-      - localhost:5815
+      - localhost:8216
+      - localhost:8217
+      - localhost:8218
+      - localhost:8219
+      - localhost:8220
+      - localhost:8221
+      - localhost:8222
+      - localhost:8223
+      - localhost:8224
+      - localhost:8225
+      - localhost:8226
+      - localhost:8227
+      - localhost:8228
+      - localhost:8229
+      - localhost:8230

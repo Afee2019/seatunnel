@@ -109,3 +109,17 @@ sink {
 - E2E tests for connectors should minimize Docker image initialization and combine source/sink tests
 - Properties should default to `private final`; prefer primitives over wrapper types
 - Sink implementations must be serializable; use singleton pattern for non-serializable properties
+
+## Port Allocation (端口分配)
+
+| 端口 | 组件 | 说明 |
+|------|------|------|
+| 8214 | Web UI | Vue.js + Vite 开发服务器 |
+| 8215 | Go Gateway | REST API 网关 |
+| 8216 | Java Zeta Engine | REST API (主节点) |
+| 8217+ | Java Zeta Engine | 集群扩展节点 |
+
+配置文件位置:
+- Web UI: `seatunnel-engine/seatunnel-engine-ui/.env.development`, `vite.config.ts`
+- Go Gateway: `seatunnel-go/cmd/gateway/main.go`, `pkg/gateway/server.go`
+- Java Engine: `seatunnel-engine/seatunnel-engine-common/src/main/resources/hazelcast.yaml`

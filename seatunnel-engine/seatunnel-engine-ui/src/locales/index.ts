@@ -22,7 +22,7 @@ import en_US from './en_US'
 const i18n = createI18n({
   legacy: false,
   globalInjection: true,
-  locale: 'en_US',
+  locale: 'zh_CN',
   messages: {
     zh_CN,
     en_US

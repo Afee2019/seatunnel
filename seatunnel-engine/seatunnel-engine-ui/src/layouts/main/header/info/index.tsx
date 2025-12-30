@@ -29,10 +29,8 @@ const Logo = defineComponent({
   render() {
     return (
       <NSpace justify="center" align="center" wrap={false} class="h-16 mr-6">
-        <h2 class="text-base font-bold">Version:</h2>
+        <h2 class="text-base font-bold">版本:</h2>
         <span class="text-base text-nowrap">{this.data.projectVersion}</span>
-        <h2 class="text-base font-bold ml-4">Commit:</h2>
-        <span class="text-base text-nowrap">{this.data.gitCommitAbbrev}</span>
       </NSpace>
     )
   }

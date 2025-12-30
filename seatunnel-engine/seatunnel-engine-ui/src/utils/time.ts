@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-import i18n from '@/locales'
-const { t } = i18n.global
 export const getRemainTime = (milliseconds: number): string => {
     if (!milliseconds) return ''
     milliseconds = milliseconds / 1000
@@ -24,9 +22,9 @@ export const getRemainTime = (milliseconds: number): string => {
     const h = parseInt(milliseconds / 60 / 60 % 24 + '')
     const m = parseInt(milliseconds / 60 % 60 + '')
     const s = parseInt(milliseconds % 60 + '')
-    const dText = d > 0 ? `${d}${t('common.date')} ` : ''
-    const hText = h > 0 ? `${h}${t('common.hour')} ` : ''
-    const mText = m > 0 ? `${m}${t('common.min')} ` : ''
-    const sText = s > 0 ? `${s}${t('common.second')}` : `0${t('common.second')}`
+    const dText = d > 0 ? `${d}天 ` : ''
+    const hText = h > 0 ? `${h}时 ` : ''
+    const mText = m > 0 ? `${m}分 ` : ''
+    const sText = s > 0 ? `${s}秒` : `0秒`
     return dText + hText + mText + sText
 }

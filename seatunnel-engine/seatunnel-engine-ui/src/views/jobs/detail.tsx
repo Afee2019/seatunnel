@@ -29,7 +29,6 @@ import {computed, defineComponent, onUnmounted, reactive, ref, watch} from 'vue'
 import { getJobInfo } from '@/service/job'
 import { useRoute } from 'vue-router'
 import type { Job, Vertex } from '@/service/job/types'
-import { useI18n } from 'vue-i18n'
 import { getRemainTime } from '@/utils/time'
 import { parse } from 'date-fns'
 import DAG from '@/components/directed-acyclic-graph'
@@ -40,7 +39,6 @@ import JobLog from '@/components/job-log'
 
 export default defineComponent({
   setup() {
-    const { t } = useI18n()
     const route = useRoute()
 
     const jobId = route.params.jobId as string
@@ -119,46 +117,46 @@ export default defineComponent({
     }
     const columns: DataTableColumns<Vertex> = [
       {
-        title: 'Name',
+        title: '名称',
         key: 'vertexName'
       },
       {
-        title: 'Received Bytes',
+        title: '读取字节数',
         key: 'key',
         render: (row) => sourceCell(row, 'TableSourceReceivedBytes')
       },
       {
-        title: 'Write Bytes',
+        title: '写入字节数',
         key: 'key',
         render: (row) => sinkCell(row, 'TableSinkWriteBytes')
       },
       {
-        title: 'Received Count',
+        title: '读取条数',
         key: 'key',
         render: (row) => sourceCell(row, 'TableSourceReceivedCount')
       },
       {
-        title: 'Write Count',
+        title: '写入条数',
         key: 'key',
         render: (row) => sinkCell(row, 'TableSinkWriteCount')
       },
       {
-        title: 'Received QPS',
+        title: '读取QPS',
         key: 'key',
         render: (row) => sourceCell(row, 'TableSourceReceivedQPS')
       },
       {
-        title: 'Write QPS',
+        title: '写入QPS',
         key: 'key',
         render: (row) => sinkCell(row, 'TableSinkWriteQPS')
       },
       {
-        title: 'Received Bytes PerSecond',
+        title: '读取速率(字节/秒)',
         key: 'key',
         render: (row) => sourceCell(row, 'TableSourceReceivedBytesPerSeconds')
       },
       {
-        title: 'Write Bytes PerSecond',
+        title: '写入速率(字节/秒)',
         key: 'key',
         render: (row) => sinkCell(row, 'TableSinkWriteBytesPerSeconds')
       }
@@ -231,18 +229,18 @@ export default defineComponent({
           </NTag>
         </div>
         <div class="mt-3 flex items-center gap-3">
-          <span>{t('detail.id')}:</span>
+          <span>作业ID:</span>
           <span class="font-bold">{job.jobId}</span>
           <NDivider vertical />
-          <span>{t('detail.createTime')}:</span>
+          <span>创建时间:</span>
           <span class="font-bold">{job.createTime}</span>
           <NDivider vertical />
-          <span>{t('detail.duration')}:</span>
+          <span>运行时长:</span>
           <span class="font-bold">{duration.value}</span>
         </div>
         <div class="tab-wrap relative">
           <NTabs v-model:value={select.value} type="line" animated>
-            <NTabPane name="Overview" tab="Overview">
+            <NTabPane name="Overview" tab="概览">
               <DAG job={job} focusedId={focusedId.value} onNodeClick={onFocus} />
               <NDataTable
                 columns={columns}
@@ -254,15 +252,15 @@ export default defineComponent({
                 rowProps={rowProps}
               />
             </NTabPane>
-            <NTabPane name="Exception" tab="Exception">
+            <NTabPane name="Exception" tab="异常信息">
               <pre style="white-space: pre-wrap; word-wrap: break-word; background-color: #f5f5f5; padding: 12px; border-radius: 4px; overflow: auto; max-height: 600px; font-family: monospace; line-height: 1.5;">
                 {job.errorMsg}
               </pre>
             </NTabPane>
-            <NTabPane name="Configuration" tab="Configuration">
+            <NTabPane name="Configuration" tab="配置">
               <Configuration data={job.envOptions || job.jobDag.envOptions}></Configuration>
             </NTabPane>
-            <NTabPane name="Log" tab="Log">
+            <NTabPane name="Log" tab="日志">
               <JobLog jobId={job.jobId}></JobLog>
             </NTabPane>
           </NTabs>

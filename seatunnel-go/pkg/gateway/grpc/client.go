@@ -18,20 +18,39 @@
 package grpc
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/keepalive"
 )
 
-// ClientConfig holds configuration for the gRPC client
+// Java REST API 端点常量
+const (
+	ContextPath                = "/hazelcast/rest/maps"
+	RestURLOverview            = "/overview"
+	RestURLRunningJobs         = "/running-jobs"
+	RestURLJobInfo             = "/job-info"
+	RestURLFinishedJobs        = "/finished-jobs"
+	RestURLSystemMonitoringInfo = "/system-monitoring-information"
+	RestURLSubmitJob           = "/submit-job"
+	RestURLStopJob             = "/stop-job"
+	RestURLEncryptConfig       = "/encrypt-config"
+	RestURLLogs                = "/logs"
+	RestURLMetrics             = "/metrics"
+)
+
+// ClientConfig holds configuration for the REST client
 type ClientConfig struct {
-	// Backend server addresses
+	// Backend server addresses (http://host:port)
 	Addresses []string
 	// Connection timeout
 	ConnectTimeout time.Duration
@@ -39,40 +58,36 @@ type ClientConfig struct {
 	RequestTimeout time.Duration
 	// Enable TLS
 	EnableTLS bool
-	// TLS certificate file (if EnableTLS is true)
-	CertFile string
+	// Skip TLS verification (for development)
+	SkipTLSVerify bool
 	// Retry settings
 	MaxRetries    int
 	RetryInterval time.Duration
-	// Keep-alive settings
-	KeepAliveTime    time.Duration
-	KeepAliveTimeout time.Duration
 }
 
 // DefaultClientConfig returns a default client configuration
 func DefaultClientConfig() *ClientConfig {
 	return &ClientConfig{
-		Addresses:        []string{"localhost:5801"},
-		ConnectTimeout:   10 * time.Second,
-		RequestTimeout:   30 * time.Second,
-		EnableTLS:        false,
-		MaxRetries:       3,
-		RetryInterval:    time.Second,
-		KeepAliveTime:    30 * time.Second,
-		KeepAliveTimeout: 10 * time.Second,
+		Addresses:      []string{"http://localhost:8216"},
+		ConnectTimeout: 10 * time.Second,
+		RequestTimeout: 30 * time.Second,
+		EnableTLS:      false,
+		MaxRetries:     3,
+		RetryInterval:  time.Second,
 	}
 }
 
-// Client is the gRPC client for communicating with SeaTunnel Java backend
+// Client is the HTTP REST client for communicating with SeaTunnel Java backend
 type Client struct {
-	config   *ClientConfig
-	conn     *grpc.ClientConn
-	logger   *zap.Logger
-	mu       sync.RWMutex
-	isClosed bool
+	config     *ClientConfig
+	httpClient *http.Client
+	baseURL    string
+	logger     *zap.Logger
+	mu         sync.RWMutex
+	isClosed   bool
 }
 
-// NewClient creates a new gRPC client
+// NewClient creates a new REST client
 func NewClient(config *ClientConfig, logger *zap.Logger) (*Client, error) {
 	if config == nil {
 		config = DefaultClientConfig()
@@ -81,71 +96,43 @@ func NewClient(config *ClientConfig, logger *zap.Logger) (*Client, error) {
 		logger = zap.NewNop()
 	}
 
-	client := &Client{
-		config: config,
-		logger: logger,
+	// Create HTTP client with custom transport
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   config.ConnectTimeout,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 
-	if err := client.connect(); err != nil {
-		return nil, err
+	if config.EnableTLS && config.SkipTLSVerify {
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
 	}
 
-	return client, nil
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   config.RequestTimeout,
+	}
+
+	// Use first address for now (TODO: implement load balancing)
+	baseURL := config.Addresses[0]
+	logger.Info("正在连接 SeaTunnel 后端", zap.String("地址", baseURL))
+
+	return &Client{
+		config:     config,
+		httpClient: httpClient,
+		baseURL:    baseURL,
+		logger:     logger,
+	}, nil
 }
 
-// connect establishes connection to the gRPC server
-func (c *Client) connect() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if len(c.config.Addresses) == 0 {
-		return fmt.Errorf("no server addresses configured")
-	}
-
-	// Use the first address for now (TODO: implement load balancing)
-	address := c.config.Addresses[0]
-
-	c.logger.Info("Connecting to SeaTunnel backend", zap.String("address", address))
-
-	// Build dial options
-	opts := []grpc.DialOption{
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                c.config.KeepAliveTime,
-			Timeout:             c.config.KeepAliveTimeout,
-			PermitWithoutStream: true,
-		}),
-	}
-
-	if c.config.EnableTLS {
-		// TODO: implement TLS support
-		return fmt.Errorf("TLS support not yet implemented")
-	} else {
-		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	}
-
-	// Create connection with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), c.config.ConnectTimeout)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, address, opts...)
-	if err != nil {
-		return fmt.Errorf("failed to connect to %s: %w", address, err)
-	}
-
-	c.conn = conn
-	c.logger.Info("Connected to SeaTunnel backend", zap.String("address", address))
-
-	return nil
-}
-
-// GetConnection returns the underlying gRPC connection
-func (c *Client) GetConnection() *grpc.ClientConn {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.conn
-}
-
-// Close closes the gRPC connection
+// Close closes the client
 func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -155,51 +142,66 @@ func (c *Client) Close() error {
 	}
 
 	c.isClosed = true
-	if c.conn != nil {
-		return c.conn.Close()
-	}
+	c.httpClient.CloseIdleConnections()
 	return nil
 }
 
-// Reconnect attempts to reconnect to the server
-func (c *Client) Reconnect() error {
-	c.mu.Lock()
-	if c.conn != nil {
-		c.conn.Close()
-		c.conn = nil
+// doRequest performs an HTTP request with retry logic
+func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+	url := c.baseURL + ContextPath + path
+
+	var reqBody io.Reader
+	if body != nil {
+		jsonData, err := json.Marshal(body)
+		if err != nil {
+			return nil, fmt.Errorf("序列化请求体失败: %w", err)
+		}
+		reqBody = bytes.NewReader(jsonData)
 	}
-	c.mu.Unlock()
 
-	return c.connect()
-}
-
-// withRetry executes a function with retry logic
-func (c *Client) withRetry(ctx context.Context, fn func() error) error {
 	var lastErr error
 	for i := 0; i <= c.config.MaxRetries; i++ {
-		if err := fn(); err != nil {
+		req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("创建请求失败: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
 			lastErr = err
-			c.logger.Warn("Request failed, retrying",
-				zap.Int("attempt", i+1),
-				zap.Int("maxRetries", c.config.MaxRetries),
+			c.logger.Warn("请求失败，正在重试",
+				zap.Int("尝试次数", i+1),
+				zap.Int("最大重试次数", c.config.MaxRetries),
 				zap.Error(err))
 
 			if i < c.config.MaxRetries {
 				select {
 				case <-ctx.Done():
-					return ctx.Err()
+					return nil, ctx.Err()
 				case <-time.After(c.config.RetryInterval):
-					// Try to reconnect
-					if err := c.Reconnect(); err != nil {
-						c.logger.Error("Reconnection failed", zap.Error(err))
-					}
+					continue
 				}
 			}
-		} else {
-			return nil
+			continue
 		}
+
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("读取响应失败: %w", err)
+		}
+
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("HTTP 错误 %d: %s", resp.StatusCode, string(respBody))
+		}
+
+		return respBody, nil
 	}
-	return lastErr
+
+	return nil, fmt.Errorf("请求失败，已重试 %d 次: %w", c.config.MaxRetries, lastErr)
 }
 
 // ============= Job Operations =============
@@ -221,17 +223,61 @@ type SubmitJobResponse struct {
 	ErrorMessage string
 }
 
+// javaSubmitJobRequest is the Java REST API request format
+type javaSubmitJobRequest struct {
+	Env    map[string]interface{} `json:"env,omitempty"`
+	Source []map[string]interface{} `json:"source,omitempty"`
+	Sink   []map[string]interface{} `json:"sink,omitempty"`
+	Transform []map[string]interface{} `json:"transform,omitempty"`
+	JobName string `json:"jobName,omitempty"`
+	IsStartWithSavePoint bool `json:"isStartWithSavePoint,omitempty"`
+}
+
 // SubmitJob submits a new job to the cluster
 func (c *Client) SubmitJob(ctx context.Context, req *SubmitJobRequest) (*SubmitJobResponse, error) {
-	// TODO: Implement when proto is compiled
-	// For now, return a mock response for testing
-	c.logger.Info("Submitting job",
-		zap.String("jobName", req.JobName),
-		zap.String("format", req.ConfigFormat))
+	c.logger.Info("正在提交作业",
+		zap.String("作业名称", req.JobName),
+		zap.String("格式", req.ConfigFormat))
+
+	// Build request body - send config content directly
+	// Java API accepts the raw config content
+	body := map[string]interface{}{
+		"env": map[string]interface{}{
+			"job.name": req.JobName,
+		},
+	}
+
+	// If config content is provided, we need to parse it or send it differently
+	// For now, we'll send a simple format
+	if req.ConfigFormat == "json" {
+		// Try to parse JSON config
+		var configObj map[string]interface{}
+		if err := json.Unmarshal([]byte(req.ConfigContent), &configObj); err == nil {
+			body = configObj
+		}
+	}
+
+	respBody, err := c.doRequest(ctx, http.MethodPost, RestURLSubmitJob, body)
+	if err != nil {
+		return nil, fmt.Errorf("提交作业失败: %w", err)
+	}
+
+	// Parse response
+	var resp struct {
+		JobID   int64  `json:"jobId"`
+		JobName string `json:"jobName"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		// Response might just be the job ID as string
+		return &SubmitJobResponse{
+			Success: true,
+			JobName: req.JobName,
+		}, nil
+	}
 
 	return &SubmitJobResponse{
-		JobID:   time.Now().UnixNano(),
-		JobName: req.JobName,
+		JobID:   resp.JobID,
+		JobName: resp.JobName,
 		Success: true,
 	}, nil
 }
@@ -248,49 +294,120 @@ type JobStatus struct {
 	ErrorMessage string
 }
 
+// javaJobStatus is the Java REST API response format
+type javaJobStatus struct {
+	JobID      int64  `json:"jobId"`
+	JobName    string `json:"jobName"`
+	JobStatus  string `json:"jobStatus"`
+	CreateTime int64  `json:"createTime"`
+	FinishTime int64  `json:"finishTime"`
+	ErrorMsg   string `json:"errorMsg"`
+}
+
 // GetJobStatus gets the status of a specific job
 func (c *Client) GetJobStatus(ctx context.Context, jobID int64) (*JobStatus, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Getting job status", zap.Int64("jobID", jobID))
+	c.logger.Info("正在获取作业状态", zap.Int64("作业ID", jobID))
+
+	path := fmt.Sprintf("%s/%d", RestURLJobInfo, jobID)
+	respBody, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("获取作业状态失败: %w", err)
+	}
+
+	var resp javaJobStatus
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
 
 	return &JobStatus{
-		JobID:      jobID,
-		JobName:    "mock-job",
-		Status:     "RUNNING",
-		JobMode:    "BATCH",
-		CreateTime: time.Now().Add(-time.Hour).UnixMilli(),
-		StartTime:  time.Now().Add(-time.Hour).UnixMilli(),
+		JobID:        resp.JobID,
+		JobName:      resp.JobName,
+		Status:       resp.JobStatus,
+		CreateTime:   resp.CreateTime,
+		FinishTime:   resp.FinishTime,
+		ErrorMessage: resp.ErrorMsg,
 	}, nil
 }
 
 // StopJob stops a running job
 func (c *Client) StopJob(ctx context.Context, jobID int64, withSavepoint bool) (string, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Stopping job",
-		zap.Int64("jobID", jobID),
-		zap.Bool("withSavepoint", withSavepoint))
+	c.logger.Info("正在停止作业",
+		zap.Int64("作业ID", jobID),
+		zap.Bool("创建保存点", withSavepoint))
+
+	body := map[string]interface{}{
+		"jobId":              jobID,
+		"isStopWithSavePoint": withSavepoint,
+	}
+
+	_, err := c.doRequest(ctx, http.MethodPost, RestURLStopJob, body)
+	if err != nil {
+		return "", fmt.Errorf("停止作业失败: %w", err)
+	}
 
 	return "", nil
 }
 
 // ListRunningJobs returns all running jobs
 func (c *Client) ListRunningJobs(ctx context.Context, page, pageSize int) ([]*JobStatus, int, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Listing running jobs",
-		zap.Int("page", page),
-		zap.Int("pageSize", pageSize))
+	c.logger.Info("正在列出运行中的作业",
+		zap.Int("页码", page),
+		zap.Int("每页数量", pageSize))
 
-	return []*JobStatus{}, 0, nil
+	respBody, err := c.doRequest(ctx, http.MethodGet, RestURLRunningJobs, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("列出运行中作业失败: %w", err)
+	}
+
+	var jobs []javaJobStatus
+	if err := json.Unmarshal(respBody, &jobs); err != nil {
+		return nil, 0, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	result := make([]*JobStatus, len(jobs))
+	for i, j := range jobs {
+		result[i] = &JobStatus{
+			JobID:        j.JobID,
+			JobName:      j.JobName,
+			Status:       j.JobStatus,
+			CreateTime:   j.CreateTime,
+			FinishTime:   j.FinishTime,
+			ErrorMessage: j.ErrorMsg,
+		}
+	}
+
+	return result, len(result), nil
 }
 
 // ListFinishedJobs returns finished jobs
 func (c *Client) ListFinishedJobs(ctx context.Context, page, pageSize int) ([]*JobStatus, int, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Listing finished jobs",
-		zap.Int("page", page),
-		zap.Int("pageSize", pageSize))
+	c.logger.Info("正在列出已完成的作业",
+		zap.Int("页码", page),
+		zap.Int("每页数量", pageSize))
 
-	return []*JobStatus{}, 0, nil
+	respBody, err := c.doRequest(ctx, http.MethodGet, RestURLFinishedJobs, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("列出已完成作业失败: %w", err)
+	}
+
+	var jobs []javaJobStatus
+	if err := json.Unmarshal(respBody, &jobs); err != nil {
+		return nil, 0, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	result := make([]*JobStatus, len(jobs))
+	for i, j := range jobs {
+		result[i] = &JobStatus{
+			JobID:        j.JobID,
+			JobName:      j.JobName,
+			Status:       j.JobStatus,
+			CreateTime:   j.CreateTime,
+			FinishTime:   j.FinishTime,
+			ErrorMessage: j.ErrorMsg,
+		}
+	}
+
+	return result, len(result), nil
 }
 
 // ============= Cluster Operations =============
@@ -312,50 +429,109 @@ type ClusterOverview struct {
 	UsedSlots        int
 }
 
+// javaClusterOverview is the Java REST API response format
+// Note: Java API returns numbers as strings
+type javaClusterOverview struct {
+	ProjectVersion  string `json:"projectVersion"`
+	GitCommitAbbrev string `json:"gitCommitAbbrev"`
+	TotalSlot       string `json:"totalSlot"`
+	UnassignedSlot  string `json:"unassignedSlot"`
+	Workers         string `json:"workers"`
+	RunningJobs     string `json:"runningJobs"`
+	FinishedJobs    string `json:"finishedJobs"`
+	FailedJobs      string `json:"failedJobs"`
+	CancelledJobs   string `json:"cancelledJobs"`
+	PendingJobs     string `json:"pendingJobs"`
+}
+
+// atoi safely converts string to int, returns 0 on error
+func atoi(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
+}
+
 // GetClusterOverview gets the cluster overview
 func (c *Client) GetClusterOverview(ctx context.Context) (*ClusterOverview, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Getting cluster overview")
+	c.logger.Info("正在获取集群概览")
+
+	respBody, err := c.doRequest(ctx, http.MethodGet, RestURLOverview, nil)
+	if err != nil {
+		return nil, fmt.Errorf("获取集群概览失败: %w", err)
+	}
+
+	var resp javaClusterOverview
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	totalSlot := atoi(resp.TotalSlot)
+	unassignedSlot := atoi(resp.UnassignedSlot)
+	workers := atoi(resp.Workers)
 
 	return &ClusterOverview{
-		ClusterID:        "seatunnel-cluster",
-		ClusterVersion:   "2.3.13",
-		ClusterStartTime: time.Now().Add(-24 * time.Hour).UnixMilli(),
-		TotalNodes:       3,
-		ActiveNodes:      3,
-		RunningJobs:      2,
-		FinishedJobs:     100,
-		TotalSlots:       12,
-		UsedSlots:        4,
+		ClusterVersion: resp.ProjectVersion,
+		TotalNodes:     workers,
+		ActiveNodes:    workers,
+		RunningJobs:    atoi(resp.RunningJobs),
+		FinishedJobs:   atoi(resp.FinishedJobs),
+		FailedJobs:     atoi(resp.FailedJobs),
+		CanceledJobs:   atoi(resp.CancelledJobs),
+		TotalSlots:     totalSlot,
+		UsedSlots:      totalSlot - unassignedSlot,
 	}, nil
 }
 
 // SystemInfo represents system information
 type SystemInfo struct {
-	NodeID             string
-	OSName             string
-	OSVersion          string
-	OSArch             string
+	NodeID              string
+	OSName              string
+	OSVersion           string
+	OSArch              string
 	AvailableProcessors int
-	SystemLoadAverage  float64
+	SystemLoadAverage   float64
 	TotalPhysicalMemory int64
 	FreePhysicalMemory  int64
 }
 
+// javaSystemInfo is the Java REST API response format
+type javaSystemInfo struct {
+	Processors    int     `json:"processors"`
+	PhysicalMemory int64  `json:"physical.memory"`
+	FreeMemory    int64   `json:"free.memory"`
+	OSName        string  `json:"osName"`
+	OSArch        string  `json:"osArch"`
+	OSVersion     string  `json:"osVersion"`
+}
+
 // GetSystemInfo gets system information
 func (c *Client) GetSystemInfo(ctx context.Context, nodeID string) (*SystemInfo, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Getting system info", zap.String("nodeID", nodeID))
+	c.logger.Info("正在获取系统信息", zap.String("节点ID", nodeID))
 
+	respBody, err := c.doRequest(ctx, http.MethodGet, RestURLSystemMonitoringInfo, nil)
+	if err != nil {
+		return nil, fmt.Errorf("获取系统信息失败: %w", err)
+	}
+
+	// Response is a list of system info for all nodes
+	var nodes []javaSystemInfo
+	if err := json.Unmarshal(respBody, &nodes); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
+
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf("没有节点信息")
+	}
+
+	// Return first node info
+	node := nodes[0]
 	return &SystemInfo{
 		NodeID:              nodeID,
-		OSName:              "Linux",
-		OSVersion:           "5.15.0",
-		OSArch:              "amd64",
-		AvailableProcessors: 8,
-		SystemLoadAverage:   2.5,
-		TotalPhysicalMemory: 16 * 1024 * 1024 * 1024,
-		FreePhysicalMemory:  8 * 1024 * 1024 * 1024,
+		OSName:              node.OSName,
+		OSVersion:           node.OSVersion,
+		OSArch:              node.OSArch,
+		AvailableProcessors: node.Processors,
+		TotalPhysicalMemory: node.PhysicalMemory,
+		FreePhysicalMemory:  node.FreeMemory,
 	}, nil
 }
 
@@ -375,26 +551,54 @@ type JobMetrics struct {
 
 // GetJobMetrics gets metrics for a specific job
 func (c *Client) GetJobMetrics(ctx context.Context, jobID int64) (*JobMetrics, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Getting job metrics", zap.Int64("jobID", jobID))
+	c.logger.Info("正在获取作业指标", zap.Int64("作业ID", jobID))
+
+	// First get job info which includes metrics
+	path := fmt.Sprintf("%s/%d", RestURLJobInfo, jobID)
+	respBody, err := c.doRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("获取作业指标失败: %w", err)
+	}
+
+	var resp struct {
+		JobID   int64 `json:"jobId"`
+		Metrics struct {
+			SourceReceivedCount int64   `json:"TableSourceReceivedCount"`
+			SinkWriteCount      int64   `json:"TableSinkWriteCount"`
+			SourceReceivedQPS   float64 `json:"TableSourceReceivedQPS"`
+			SinkWriteQPS        float64 `json:"TableSinkWriteQPS"`
+			SourceReceivedBytes int64   `json:"TableSourceReceivedBytes"`
+			SinkWriteBytes      int64   `json:"TableSinkWriteBytes"`
+		} `json:"metrics"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, fmt.Errorf("解析响应失败: %w", err)
+	}
 
 	return &JobMetrics{
 		JobID:               jobID,
-		SourceReceivedCount: 10000,
-		SinkWriteCount:      9950,
-		SourceReceivedBytes: 1024 * 1024 * 100,
-		SinkWriteBytes:      1024 * 1024 * 99,
-		SourceReceivedQPS:   1000.0,
-		SinkWriteQPS:        995.0,
-		TotalTimeMs:         60000,
+		SourceReceivedCount: resp.Metrics.SourceReceivedCount,
+		SinkWriteCount:      resp.Metrics.SinkWriteCount,
+		SourceReceivedBytes: resp.Metrics.SourceReceivedBytes,
+		SinkWriteBytes:      resp.Metrics.SinkWriteBytes,
+		SourceReceivedQPS:   resp.Metrics.SourceReceivedQPS,
+		SinkWriteQPS:        resp.Metrics.SinkWriteQPS,
 	}, nil
 }
 
 // EncryptConfig encrypts a configuration value
 func (c *Client) EncryptConfig(ctx context.Context, plainText string) (string, error) {
-	// TODO: Implement when proto is compiled
-	c.logger.Info("Encrypting config value")
+	c.logger.Info("正在加密配置值")
 
-	// For now, return a mock encrypted value
-	return fmt.Sprintf("ENC(%s)", plainText), nil
+	body := map[string]string{
+		"data": plainText,
+	}
+
+	respBody, err := c.doRequest(ctx, http.MethodPost, RestURLEncryptConfig, body)
+	if err != nil {
+		return "", fmt.Errorf("加密配置失败: %w", err)
+	}
+
+	// Response should be the encrypted value
+	return string(respBody), nil
 }

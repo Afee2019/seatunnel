@@ -18,7 +18,6 @@
 import { defineComponent, ref, type PropType, onMounted, h, type Component } from 'vue'
 import { NIcon, NLayoutSider, NMenu } from 'naive-ui'
 import { useRoute, RouterLink } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 import { DesktopOutline, ListOutline, PeopleOutline, PersonOutline } from '@vicons/ionicons5'
 
 const Sidebar = defineComponent({
@@ -33,7 +32,6 @@ const Sidebar = defineComponent({
     const collapsedRef = ref(false)
     const defaultExpandedKeys = ['']
     const route = useRoute()
-    const { t } = useI18n()
 
     const showDrop = ref(false)
 
@@ -52,7 +50,7 @@ const Sidebar = defineComponent({
               },
               exact: false
             },
-            { default: () => t('menu.overview') }
+            { default: () => '概览' }
           ),
         key: 'overview',
         icon: renderIcon(DesktopOutline)
@@ -67,7 +65,7 @@ const Sidebar = defineComponent({
               },
               exact: false
             },
-            { default: () => t('menu.jobs') }
+            { default: () => '作业' }
           ),
         key: 'jobs',
         icon: renderIcon(ListOutline)
@@ -82,7 +80,7 @@ const Sidebar = defineComponent({
               },
               exact: false
             },
-            { default: () => t('menu.managers.workers') }
+            { default: () => '工作节点' }
           ),
         key: 'workers',
         icon: renderIcon(PeopleOutline)
@@ -97,7 +95,7 @@ const Sidebar = defineComponent({
               },
               exact: false
             },
-            { default: () => t('menu.managers.master') }
+            { default: () => '主节点' }
           ),
         key: 'master',
         icon: renderIcon(PersonOutline)

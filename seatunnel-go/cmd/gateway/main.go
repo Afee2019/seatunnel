@@ -40,43 +40,42 @@ var (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "seatunnel-gateway",
-		Short: "SeaTunnel REST API Gateway",
-		Long: `SeaTunnel Gateway is a lightweight REST API gateway that provides
-HTTP endpoints for interacting with the SeaTunnel cluster.
+		Short: "SeaTunnel REST API 网关",
+		Long: `SeaTunnel Gateway 是一个轻量级的 REST API 网关，
+提供 HTTP 端点用于与 SeaTunnel 集群交互。
 
-It bridges the Vue.js frontend with the Java backend via gRPC,
-and exports Prometheus metrics for monitoring.`,
+它通过 gRPC 桥接前端与 Java 后端，并导出 Prometheus 指标用于监控。`,
 		Run: runGateway,
 	}
 
 	// Server flags
-	rootCmd.Flags().StringP("host", "H", "0.0.0.0", "Host to bind")
-	rootCmd.Flags().IntP("port", "p", 8801, "Port to listen on")
+	rootCmd.Flags().StringP("host", "H", "0.0.0.0", "绑定的主机地址")
+	rootCmd.Flags().IntP("port", "p", 8215, "监听端口")
 
 	// Backend flags
-	rootCmd.Flags().StringSlice("backend", []string{"localhost:5801"}, "Backend gRPC addresses")
-	rootCmd.Flags().Duration("backend-timeout", 30*time.Second, "Backend request timeout")
+	rootCmd.Flags().StringSlice("backend", []string{"http://localhost:8216"}, "后端 REST API 地址 (格式: http://host:port)")
+	rootCmd.Flags().Duration("backend-timeout", 30*time.Second, "后端请求超时时间")
 
 	// Feature flags
-	rootCmd.Flags().Bool("enable-metrics", true, "Enable Prometheus metrics endpoint")
-	rootCmd.Flags().Bool("debug", false, "Enable debug mode")
+	rootCmd.Flags().Bool("enable-metrics", true, "启用 Prometheus 指标端点")
+	rootCmd.Flags().Bool("debug", false, "启用调试模式")
 
 	// CORS flags
-	rootCmd.Flags().StringSlice("cors-origins", []string{"*"}, "CORS allowed origins")
+	rootCmd.Flags().StringSlice("cors-origins", []string{"*"}, "CORS 允许的来源")
 
 	// Logging flags
-	rootCmd.Flags().String("log-level", "info", "Log level (debug, info, warn, error)")
-	rootCmd.Flags().String("log-format", "json", "Log format (json, console)")
+	rootCmd.Flags().String("log-level", "info", "日志级别 (debug, info, warn, error)")
+	rootCmd.Flags().String("log-format", "json", "日志格式 (json, console)")
 
 	// Version command
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "version",
-		Short: "Print version information",
+		Short: "打印版本信息",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("SeaTunnel Gateway\n")
-			fmt.Printf("  Version:    %s\n", version)
-			fmt.Printf("  Build Time: %s\n", buildTime)
-			fmt.Printf("  Git Commit: %s\n", gitCommit)
+			fmt.Printf("SeaTunnel Gateway 网关\n")
+			fmt.Printf("  版本:     %s\n", version)
+			fmt.Printf("  构建时间: %s\n", buildTime)
+			fmt.Printf("  Git提交:  %s\n", gitCommit)
 		},
 	})
 
@@ -122,7 +121,7 @@ func runGateway(cmd *cobra.Command, args []string) {
 	// Create server
 	server, err := gateway.NewServer(config, logger)
 	if err != nil {
-		logger.Fatal("Failed to create server", zap.Error(err))
+		logger.Fatal("创建服务器失败", zap.Error(err))
 	}
 
 	// Handle shutdown signals
@@ -131,21 +130,21 @@ func runGateway(cmd *cobra.Command, args []string) {
 
 	go func() {
 		sig := <-sigChan
-		logger.Info("Received signal, shutting down", zap.String("signal", sig.String()))
+		logger.Info("收到信号，正在关闭", zap.String("信号", sig.String()))
 		if err := server.Stop(); err != nil {
-			logger.Error("Shutdown error", zap.Error(err))
+			logger.Error("关闭时出错", zap.Error(err))
 		}
 	}()
 
 	// Start server
-	logger.Info("Starting SeaTunnel Gateway",
-		zap.String("version", version),
-		zap.String("address", fmt.Sprintf("%s:%d", host, port)),
-		zap.Strings("backend", backendAddrs),
+	logger.Info("正在启动 SeaTunnel Gateway",
+		zap.String("版本", version),
+		zap.String("地址", fmt.Sprintf("%s:%d", host, port)),
+		zap.Strings("后端", backendAddrs),
 	)
 
 	if err := server.Start(); err != nil {
-		logger.Fatal("Server failed", zap.Error(err))
+		logger.Fatal("服务器启动失败", zap.Error(err))
 	}
 }
 

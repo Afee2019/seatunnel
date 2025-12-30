@@ -48,21 +48,21 @@ var (
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "seatunnel",
-		Short: "SeaTunnel Go CLI - A high-performance data integration tool",
-		Long: `SeaTunnel Go CLI is a lightweight command-line interface for SeaTunnel.
-It supports running local jobs and submitting jobs to SeaTunnel clusters.`,
+		Short: "SeaTunnel Go 命令行工具 - 高性能数据集成工具",
+		Long: `SeaTunnel Go 命令行工具是 SeaTunnel 的轻量级命令行界面。
+支持本地运行作业和向 SeaTunnel 集群提交作业。`,
 		Version: version,
 		Run:     runCommand,
 	}
 
 	// Add flags
-	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Config file path (required)")
-	rootCmd.Flags().StringSliceVarP(&variables, "variable", "i", nil, "Variable substitution in format key=value")
-	rootCmd.Flags().BoolVar(&checkConfig, "check", false, "Check config file syntax")
-	rootCmd.Flags().BoolVar(&listPlugins, "list-plugins", false, "List available plugins")
-	rootCmd.Flags().StringVarP(&jobName, "name", "n", "", "Job name")
-	rootCmd.Flags().IntVarP(&parallelism, "parallelism", "p", 1, "Parallelism level")
-	rootCmd.Flags().StringVarP(&masterAddr, "master", "m", "", "Master address for cluster mode")
+	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "配置文件路径 (必填)")
+	rootCmd.Flags().StringSliceVarP(&variables, "variable", "i", nil, "变量替换，格式: key=value")
+	rootCmd.Flags().BoolVar(&checkConfig, "check", false, "检查配置文件语法")
+	rootCmd.Flags().BoolVar(&listPlugins, "list-plugins", false, "列出可用插件")
+	rootCmd.Flags().StringVarP(&jobName, "name", "n", "", "作业名称")
+	rootCmd.Flags().IntVarP(&parallelism, "parallelism", "p", 1, "并行度")
+	rootCmd.Flags().StringVarP(&masterAddr, "master", "m", "", "集群模式的主节点地址")
 
 	// Add subcommands
 	rootCmd.AddCommand(newVersionCmd())
@@ -99,12 +99,12 @@ func runCommand(cmd *cobra.Command, args []string) {
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Print version information",
+		Short: "打印版本信息",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("SeaTunnel Go CLI\n")
-			fmt.Printf("  Version:    %s\n", version)
-			fmt.Printf("  Build Time: %s\n", buildTime)
-			fmt.Printf("  Git Commit: %s\n", gitCommit)
+			fmt.Printf("SeaTunnel Go 命令行工具\n")
+			fmt.Printf("  版本:     %s\n", version)
+			fmt.Printf("  构建时间: %s\n", buildTime)
+			fmt.Printf("  Git提交:  %s\n", gitCommit)
 		},
 	}
 }
@@ -113,16 +113,16 @@ func newVersionCmd() *cobra.Command {
 func newCheckCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check",
-		Short: "Check configuration file syntax",
+		Short: "检查配置文件语法",
 		Run: func(cmd *cobra.Command, args []string) {
 			if configPath == "" {
-				fmt.Fprintln(os.Stderr, "Error: --config is required")
+				fmt.Fprintln(os.Stderr, "错误: 必须指定 --config 参数")
 				os.Exit(1)
 			}
 			checkConfigFile()
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Config file path (required)")
+	cmd.Flags().StringVarP(&configPath, "config", "c", "", "配置文件路径 (必填)")
 	return cmd
 }
 
@@ -130,19 +130,19 @@ func newCheckCmd() *cobra.Command {
 func newLocalCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "local",
-		Short: "Run job in local mode",
+		Short: "以本地模式运行作业",
 		Run: func(cmd *cobra.Command, args []string) {
 			if configPath == "" {
-				fmt.Fprintln(os.Stderr, "Error: --config is required")
+				fmt.Fprintln(os.Stderr, "错误: 必须指定 --config 参数")
 				os.Exit(1)
 			}
 			runLocalJob()
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Config file path (required)")
-	cmd.Flags().StringSliceVarP(&variables, "variable", "i", nil, "Variable substitution in format key=value")
-	cmd.Flags().StringVarP(&jobName, "name", "n", "", "Job name")
-	cmd.Flags().IntVarP(&parallelism, "parallelism", "p", 1, "Parallelism level")
+	cmd.Flags().StringVarP(&configPath, "config", "c", "", "配置文件路径 (必填)")
+	cmd.Flags().StringSliceVarP(&variables, "variable", "i", nil, "变量替换，格式: key=value")
+	cmd.Flags().StringVarP(&jobName, "name", "n", "", "作业名称")
+	cmd.Flags().IntVarP(&parallelism, "parallelism", "p", 1, "并行度")
 	return cmd
 }
 
@@ -150,7 +150,7 @@ func newLocalCmd() *cobra.Command {
 func newListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List available plugins",
+		Short: "列出可用插件",
 		Run: func(cmd *cobra.Command, args []string) {
 			listAvailablePlugins()
 		},
@@ -171,33 +171,33 @@ func checkConfigFile() {
 
 	jobConfig, err := parser.ParseFile(configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Config check FAILED: %v\n", err)
+		fmt.Fprintf(os.Stderr, "配置检查失败: %v\n", err)
 		os.Exit(1)
 	}
 
 	if err := jobConfig.Validate(); err != nil {
-		fmt.Fprintf(os.Stderr, "Config validation FAILED: %v\n", err)
+		fmt.Fprintf(os.Stderr, "配置验证失败: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("Config check PASSED")
-	fmt.Printf("  Job Mode:    %s\n", jobConfig.GetJobMode())
-	fmt.Printf("  Parallelism: %d\n", jobConfig.GetParallelism())
-	fmt.Printf("  Sources:     %d\n", len(jobConfig.Source))
-	fmt.Printf("  Transforms:  %d\n", len(jobConfig.Transform))
-	fmt.Printf("  Sinks:       %d\n", len(jobConfig.Sink))
+	fmt.Println("配置检查通过")
+	fmt.Printf("  作业模式: %s\n", jobConfig.GetJobMode())
+	fmt.Printf("  并行度:   %d\n", jobConfig.GetParallelism())
+	fmt.Printf("  数据源:   %d 个\n", len(jobConfig.Source))
+	fmt.Printf("  转换器:   %d 个\n", len(jobConfig.Transform))
+	fmt.Printf("  数据汇:   %d 个\n", len(jobConfig.Sink))
 }
 
 // listAvailablePlugins lists all available plugins
 func listAvailablePlugins() {
 	reg := registry.GetRegistry()
 
-	fmt.Println("Available Source Plugins:")
+	fmt.Println("可用的数据源插件:")
 	for _, name := range reg.ListSourceFactories() {
 		fmt.Printf("  - %s\n", name)
 	}
 
-	fmt.Println("\nAvailable Sink Plugins:")
+	fmt.Println("\n可用的数据汇插件:")
 	for _, name := range reg.ListSinkFactories() {
 		fmt.Printf("  - %s\n", name)
 	}
@@ -219,26 +219,26 @@ func runLocalJob() {
 
 	jobConfig, err := parser.ParseFile(configPath)
 	if err != nil {
-		logger.Fatal("Failed to parse config", zap.Error(err))
+		logger.Fatal("解析配置文件失败", zap.Error(err))
 	}
 
 	if err := jobConfig.Validate(); err != nil {
-		logger.Fatal("Invalid config", zap.Error(err))
+		logger.Fatal("配置文件无效", zap.Error(err))
 	}
 
 	// Create executor
 	executor := NewLocalExecutor(jobConfig, logger)
 
 	// Run job
-	logger.Info("Starting SeaTunnel job",
-		zap.String("config", configPath),
-		zap.String("mode", jobConfig.GetJobMode()),
-		zap.Int("parallelism", jobConfig.GetParallelism()),
+	logger.Info("正在启动 SeaTunnel 作业",
+		zap.String("配置文件", configPath),
+		zap.String("作业模式", jobConfig.GetJobMode()),
+		zap.Int("并行度", jobConfig.GetParallelism()),
 	)
 
 	if err := executor.Execute(); err != nil {
-		logger.Fatal("Job execution failed", zap.Error(err))
+		logger.Fatal("作业执行失败", zap.Error(err))
 	}
 
-	logger.Info("Job completed successfully")
+	logger.Info("作业执行成功")
 }

@@ -62,11 +62,11 @@ type ServerConfig struct {
 func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
 		Host:             "0.0.0.0",
-		Port:             8801,
+		Port:             8215,
 		ReadTimeout:      30 * time.Second,
 		WriteTimeout:     30 * time.Second,
 		ShutdownTimeout:  10 * time.Second,
-		BackendAddresses: []string{"localhost:5801"},
+		BackendAddresses: []string{"http://localhost:8216"},
 		BackendTimeout:   30 * time.Second,
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -111,7 +111,7 @@ func NewServer(config *ServerConfig, logger *zap.Logger) (*Server, error) {
 	}
 	grpcClient, err := grpc.NewClient(grpcConfig, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create gRPC client: %w", err)
+		return nil, fmt.Errorf("创建 gRPC 客户端失败: %w", err)
 	}
 
 	// Create metrics
@@ -220,12 +220,12 @@ func requestLogger(logger *zap.Logger) gin.HandlerFunc {
 			path = path + "?" + query
 		}
 
-		logger.Info("HTTP request",
-			zap.String("method", c.Request.Method),
-			zap.String("path", path),
-			zap.Int("status", status),
-			zap.Duration("latency", latency),
-			zap.String("clientIP", c.ClientIP()),
+		logger.Info("HTTP 请求",
+			zap.String("方法", c.Request.Method),
+			zap.String("路径", path),
+			zap.Int("状态码", status),
+			zap.Duration("耗时", latency),
+			zap.String("客户端IP", c.ClientIP()),
 		)
 	}
 }
@@ -242,13 +242,13 @@ func metricsMiddleware(m *metrics.GatewayMetrics) gin.HandlerFunc {
 
 // Start starts the gateway server
 func (s *Server) Start() error {
-	s.logger.Info("Starting SeaTunnel Gateway",
-		zap.String("address", s.httpServer.Addr),
-		zap.Bool("metricsEnabled", s.config.EnableMetrics),
+	s.logger.Info("正在启动 SeaTunnel Gateway",
+		zap.String("地址", s.httpServer.Addr),
+		zap.Bool("指标已启用", s.config.EnableMetrics),
 	)
 
 	if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("failed to start server: %w", err)
+		return fmt.Errorf("启动服务器失败: %w", err)
 	}
 
 	return nil
@@ -256,22 +256,22 @@ func (s *Server) Start() error {
 
 // Stop gracefully stops the gateway server
 func (s *Server) Stop() error {
-	s.logger.Info("Shutting down SeaTunnel Gateway")
+	s.logger.Info("正在关闭 SeaTunnel Gateway")
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.config.ShutdownTimeout)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
-		s.logger.Error("Server shutdown failed", zap.Error(err))
+		s.logger.Error("服务器关闭失败", zap.Error(err))
 		return err
 	}
 
 	if err := s.grpcClient.Close(); err != nil {
-		s.logger.Error("gRPC client close failed", zap.Error(err))
+		s.logger.Error("gRPC 客户端关闭失败", zap.Error(err))
 		return err
 	}
 
-	s.logger.Info("SeaTunnel Gateway stopped")
+	s.logger.Info("SeaTunnel Gateway 已停止")
 	return nil
 }
 

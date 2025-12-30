@@ -34,11 +34,13 @@ export default defineConfig({
     }
   },
   server: {
+    port: 8214,
     proxy: {
       '/api': {
         target: loadEnv('development', './').VITE_APP_API_SERVICE,
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        // /api/xxx -> /hazelcast/rest/maps/xxx
+        rewrite: (path) => path.replace(/^\/api/, '/hazelcast/rest/maps')
       }
     }
   }
