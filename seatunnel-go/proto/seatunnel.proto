@@ -1,0 +1,331 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+syntax = "proto3";
+
+package seatunnel;
+
+option go_package = "github.com/apache/seatunnel-go/pkg/gateway/grpc/pb";
+
+// SeaTunnelService provides the main API for interacting with SeaTunnel cluster
+service SeaTunnelService {
+    // Submit a new job to the cluster
+    rpc SubmitJob(SubmitJobRequest) returns (SubmitJobResponse);
+
+    // Get the status of a specific job
+    rpc GetJobStatus(GetJobStatusRequest) returns (JobStatus);
+
+    // Stop a running job
+    rpc StopJob(StopJobRequest) returns (StopJobResponse);
+
+    // List all running jobs
+    rpc ListRunningJobs(ListJobsRequest) returns (ListJobsResponse);
+
+    // List finished jobs
+    rpc ListFinishedJobs(ListJobsRequest) returns (ListJobsResponse);
+
+    // Get cluster overview
+    rpc GetOverview(GetOverviewRequest) returns (ClusterOverview);
+
+    // Get system monitoring information
+    rpc GetSystemInfo(GetSystemInfoRequest) returns (SystemInfo);
+
+    // Get job metrics
+    rpc GetJobMetrics(GetJobMetricsRequest) returns (JobMetrics);
+
+    // Save point for a job
+    rpc SavePoint(SavePointRequest) returns (SavePointResponse);
+
+    // Get logs for a job
+    rpc GetLogs(GetLogsRequest) returns (LogsResponse);
+
+    // Encrypt configuration value
+    rpc EncryptConfig(EncryptConfigRequest) returns (EncryptConfigResponse);
+}
+
+// ============= Job Submission =============
+
+message SubmitJobRequest {
+    // Configuration content (HOCON or JSON format)
+    string config_content = 1;
+    // Configuration format: "hocon" or "json"
+    string config_format = 2;
+    // Variable substitutions
+    map<string, string> variables = 3;
+    // Optional job name override
+    string job_name = 4;
+    // Start with savepoint path
+    string savepoint_path = 5;
+}
+
+message SubmitJobResponse {
+    // Assigned job ID
+    int64 job_id = 1;
+    // Job name
+    string job_name = 2;
+    // Success indicator
+    bool success = 3;
+    // Error message if failed
+    string error_message = 4;
+}
+
+// ============= Job Status =============
+
+message GetJobStatusRequest {
+    int64 job_id = 1;
+}
+
+message JobStatus {
+    int64 job_id = 1;
+    string job_name = 2;
+    // Status: CREATED, SCHEDULED, STARTING, RUNNING, FINISHED, CANCELED, FAILED
+    string status = 3;
+    // Job mode: BATCH or STREAMING
+    string job_mode = 4;
+    // Timestamps in milliseconds
+    int64 create_time = 5;
+    int64 start_time = 6;
+    int64 finish_time = 7;
+    // Error info if failed
+    string error_message = 8;
+    // Metrics
+    JobMetrics metrics = 9;
+    // Plugin info
+    repeated PluginInfo plugins = 10;
+}
+
+message PluginInfo {
+    string plugin_name = 1;
+    string plugin_type = 2; // SOURCE, TRANSFORM, SINK
+    map<string, string> options = 3;
+}
+
+// ============= Stop Job =============
+
+message StopJobRequest {
+    int64 job_id = 1;
+    // Whether to perform savepoint before stopping
+    bool with_savepoint = 2;
+}
+
+message StopJobResponse {
+    bool success = 1;
+    string error_message = 2;
+    // Savepoint path if with_savepoint was true
+    string savepoint_path = 3;
+}
+
+// ============= List Jobs =============
+
+message ListJobsRequest {
+    // Pagination
+    int32 page = 1;
+    int32 page_size = 2;
+    // Filters
+    string status_filter = 3;
+    string job_name_filter = 4;
+}
+
+message ListJobsResponse {
+    repeated JobStatus jobs = 1;
+    int32 total_count = 2;
+    int32 page = 3;
+    int32 page_size = 4;
+}
+
+// ============= Cluster Overview =============
+
+message GetOverviewRequest {}
+
+message ClusterOverview {
+    // Cluster info
+    string cluster_id = 1;
+    string cluster_version = 2;
+    int64 cluster_start_time = 3;
+
+    // Node info
+    int32 total_nodes = 4;
+    int32 active_nodes = 5;
+    repeated NodeInfo nodes = 6;
+
+    // Job statistics
+    int32 running_jobs = 7;
+    int32 finished_jobs = 8;
+    int32 failed_jobs = 9;
+    int32 canceled_jobs = 10;
+
+    // Resource info
+    int64 total_memory_bytes = 11;
+    int64 used_memory_bytes = 12;
+    int32 total_slots = 13;
+    int32 used_slots = 14;
+}
+
+message NodeInfo {
+    string node_id = 1;
+    string address = 2;
+    bool is_master = 3;
+    string status = 4;
+    int64 start_time = 5;
+    int32 running_tasks = 6;
+    int64 total_memory = 7;
+    int64 used_memory = 8;
+}
+
+// ============= System Info =============
+
+message GetSystemInfoRequest {
+    string node_id = 1; // Optional, empty for current node
+}
+
+message SystemInfo {
+    string node_id = 1;
+    // OS info
+    string os_name = 2;
+    string os_version = 3;
+    string os_arch = 4;
+    // JVM info (for Java backend)
+    string jvm_version = 5;
+    int64 jvm_heap_max = 6;
+    int64 jvm_heap_used = 7;
+    int64 jvm_non_heap_used = 8;
+    // CPU
+    int32 available_processors = 9;
+    double system_load_average = 10;
+    // Memory
+    int64 total_physical_memory = 11;
+    int64 free_physical_memory = 12;
+    // Disk
+    repeated DiskInfo disks = 13;
+    // Network
+    repeated NetworkInfo networks = 14;
+}
+
+message DiskInfo {
+    string path = 1;
+    int64 total_bytes = 2;
+    int64 free_bytes = 3;
+    int64 usable_bytes = 4;
+}
+
+message NetworkInfo {
+    string interface_name = 1;
+    string address = 2;
+    int64 bytes_sent = 3;
+    int64 bytes_received = 4;
+}
+
+// ============= Job Metrics =============
+
+message GetJobMetricsRequest {
+    int64 job_id = 1;
+}
+
+message JobMetrics {
+    int64 job_id = 1;
+    // Row counts
+    int64 source_received_count = 2;
+    int64 sink_write_count = 3;
+    // Byte counts
+    int64 source_received_bytes = 4;
+    int64 sink_write_bytes = 5;
+    // Rates (per second)
+    double source_received_qps = 6;
+    double sink_write_qps = 7;
+    // Timing
+    int64 read_time_ms = 8;
+    int64 write_time_ms = 9;
+    int64 total_time_ms = 10;
+    // Per-plugin metrics
+    repeated PluginMetrics plugin_metrics = 11;
+}
+
+message PluginMetrics {
+    string plugin_name = 1;
+    string plugin_type = 2;
+    int64 row_count = 3;
+    int64 byte_count = 4;
+    double qps = 5;
+    int64 process_time_ms = 6;
+    map<string, string> extra_metrics = 7;
+}
+
+// ============= Savepoint =============
+
+message SavePointRequest {
+    int64 job_id = 1;
+}
+
+message SavePointResponse {
+    bool success = 1;
+    string savepoint_path = 2;
+    string error_message = 3;
+}
+
+// ============= Logs =============
+
+message GetLogsRequest {
+    int64 job_id = 1;
+    // Log level filter: DEBUG, INFO, WARN, ERROR
+    string level_filter = 2;
+    // Time range in milliseconds
+    int64 start_time = 3;
+    int64 end_time = 4;
+    // Pagination
+    int32 limit = 5;
+    int32 offset = 6;
+}
+
+message LogsResponse {
+    repeated LogEntry logs = 1;
+    int32 total_count = 2;
+}
+
+message LogEntry {
+    int64 timestamp = 1;
+    string level = 2;
+    string logger = 3;
+    string message = 4;
+    string exception = 5;
+    string node_id = 6;
+}
+
+// ============= Config Encryption =============
+
+message EncryptConfigRequest {
+    string plain_text = 1;
+}
+
+message EncryptConfigResponse {
+    string encrypted_text = 1;
+}
+
+// ============= Health Check =============
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+    bool healthy = 1;
+    string status = 2;
+    map<string, ComponentHealth> components = 3;
+}
+
+message ComponentHealth {
+    bool healthy = 1;
+    string status = 2;
+    string message = 3;
+}
